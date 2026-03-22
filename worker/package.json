@@ -1,0 +1,11 @@
+{
+  "name": "@sfm/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "python app.py",
+    "start": "python app.py",
+    "build": "python -m compileall .",
+    "test": "python -m unittest discover -s tests -p \"test_*.py\""
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "secure-file-manager",
+  "version": "0.1.0",
+  "description": "Intelligent Secure File Manager with Adaptive Steganography",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "worker"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w frontend\" \"npm run dev -w backend\" \"npm run dev -w worker\"",
+    "build": "npm run build -w frontend && npm run build -w backend",
+    "start": "concurrently \"npm run start -w frontend\" \"npm run start -w backend\" \"npm run start -w worker\"",
+    "worker:dev": "npm run dev -w worker",
+    "worker:build": "npm run build -w worker",
+    "lint": "npm run lint -w frontend && npm run lint -w backend",
+    "test": "npm run test -w frontend && npm run test -w backend && npm run test -w worker"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.8",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/jsonwebtoken": "^9.0.10",
+    "concurrently": "^8.2.0"
+  }
+}
