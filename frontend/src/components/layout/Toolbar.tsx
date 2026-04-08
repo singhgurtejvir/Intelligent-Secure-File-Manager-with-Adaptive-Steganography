@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFileStore } from '@/store/fileStore'
 import { useUiStore } from '@/store/uiStore'
-import { useVaultStore } from '@/store/vaultStore'
 
 export default function Toolbar({
   onDeleteSelection,
@@ -22,7 +21,6 @@ export default function Toolbar({
   const setPendingUploadTarget = useFileStore((state) => state.setPendingUploadTarget)
   const viewMode = useUiStore((state) => state.viewMode)
   const setViewMode = useUiStore((state) => state.setViewMode)
-  const isVaultActive = useVaultStore((state) => state.isVaultActive)
 
   const activeFolderId = currentLocation.kind === 'folder' ? currentLocation.folderId : null
   const hasSelection = selection.length > 0
@@ -41,18 +39,16 @@ export default function Toolbar({
     <div className="fm-toolbar">
       <div className="fm-toolbar-group fm-toolbar-group-leading">
         <span className="fm-toolbar-label">{title}</span>
-        {isVaultActive ? (
-          <button
-            type="button"
-            className="toolbar-button toolbar-button-primary-soft"
-            onClick={() => {
-              setPendingUploadTarget(activeFolderId)
-              navigate('/upload')
-            }}
-          >
-            Add File
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="toolbar-button toolbar-button-primary-soft"
+          onClick={() => {
+            setPendingUploadTarget(activeFolderId)
+            navigate('/upload')
+          }}
+        >
+          Add File
+        </button>
         <button
           type="button"
           className="toolbar-button"

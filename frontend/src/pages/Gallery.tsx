@@ -1,6 +1,16 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import { ApiError, checkFileContext, decryptFile, deleteFile, listFiles, type FileContextCheck, type VaultFile } from '@/utils/api'
+import {
+  ApiError,
+  checkFileContext,
+  createShare,
+  decryptFile,
+  deleteFile,
+  listFiles,
+  type FileContextCheck,
+  type VaultFile,
+} from '@/utils/api'
 import { getDeviceContext } from '@/utils/fingerprint'
+import { downloadBlob } from '@/utils/download'
 import { useVaultStore } from '@/store/vaultStore'
 import { useFileStore } from '@/store/fileStore'
 import Breadcrumbs from '@/components/layout/Breadcrumbs'
@@ -8,17 +18,7 @@ import StatusBar from '@/components/layout/StatusBar'
 import Toolbar from '@/components/layout/Toolbar'
 import FileWorkspace from '@/components/filemanager/FileWorkspace'
 import DecryptModal from '@/components/DecryptModal'
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = window.URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
-  window.URL.revokeObjectURL(url)
-}
+import ShareModal from '@/components/ShareModal'
 
 export default function Gallery() {
   const [files, setFiles] = useState<VaultFile[]>([])
@@ -28,6 +28,8 @@ export default function Gallery() {
   const [decrypting, setDecrypting] = useState(false)
   const [contextCheck, setContextCheck] = useState<FileContextCheck | null>(null)
   const [checkingContext, setCheckingContext] = useState(false)
+  const [shareFileItem, setShareFileItem] = useState<VaultFile | null>(null)
+  const [creatingShare, setCreatingShare] = useState(false)
 
   const isVaultActive = useVaultStore((state) => state.isVaultActive)
   const isVerifyingVault = useVaultStore((state) => state.isVerifyingVault)
@@ -228,6 +230,57 @@ export default function Gallery() {
     }
   }
 
+  const handleCreateShare = async (input: {
+    shareType: 'account' | 'link' | 'code'
+    deliveryMode: 'plain-file' | 'embedded-carrier' | 'payload-file'
+    recipientEmail?: string
+    password?: string
+  }) => {
+    if (!shareFileItem) {
+      return
+    }
+
+    setCreatingShare(true)
+    try {
+      const result = await createShare({
+        fileId: shareFileItem.id,
+        ...input,
+      })
+
+      pushToast({
+        title:
+          result.shareType === 'account'
+            ? 'Shared to account'
+            : result.shareType === 'link'
+              ? 'Link created'
+              : 'Access code created',
+        description:
+          result.shareType === 'account'
+            ? `${result.downloadFileName} is now available to ${result.recipientEmail}.`
+            : result.shareType === 'link'
+              ? result.url || 'Share link created successfully.'
+              : `Receiver code: ${result.code}`,
+        tone: 'success',
+      })
+
+      if (result.url) {
+        await navigator.clipboard.writeText(result.url).catch(() => undefined)
+      } else if (result.code) {
+        await navigator.clipboard.writeText(result.code).catch(() => undefined)
+      }
+
+      setShareFileItem(null)
+    } catch (error) {
+      pushToast({
+        title: 'Share failed',
+        description: error instanceof Error ? error.message : 'Unable to create share',
+        tone: 'error',
+      })
+    } finally {
+      setCreatingShare(false)
+    }
+  }
+
   return (
     <section className="page-layout file-manager-page">
       <div className="file-manager-hero glass-panel">
@@ -269,6 +322,7 @@ export default function Gallery() {
             <FileWorkspace
               files={files}
               onDecrypt={setDecryptFileItem}
+              onShare={setShareFileItem}
               onDeleteFiles={handleDelete}
             />
           )}
@@ -277,7 +331,11 @@ export default function Gallery() {
       )}
 
       <DecryptModal
-        file={isVaultActive ? decryptFileItem : null}
+        file={
+          isVaultActive && decryptFileItem?.storageMode !== 'plain' && decryptFileItem?.steganographyMethod !== 'none'
+            ? decryptFileItem
+            : null
+        }
         password={decryptPassword}
         onPasswordChange={setDecryptPassword}
         onClose={() => {
@@ -288,6 +346,14 @@ export default function Gallery() {
         onSubmit={handleDecrypt}
         decrypting={decrypting}
         contextStatus={decryptContextStatus}
+      />
+
+      <ShareModal
+        file={shareFileItem}
+        isVaultActive={isVaultActive}
+        creating={creatingShare}
+        onClose={() => setShareFileItem(null)}
+        onSubmit={handleCreateShare}
       />
     </section>
   )

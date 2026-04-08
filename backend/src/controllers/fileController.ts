@@ -61,9 +61,10 @@ type DecryptableFile = {
   decoyContent?: string
   encryptedPayloadPath?: string
   carrierPath: string
+  cleanCarrierPath?: string
   carrierShardPaths?: string[]
-  storageMode?: 'embedded' | 'encrypted-file'
-  steganographyMethod: 'lsb' | 'dct' | 'multi-file'
+  storageMode?: 'embedded' | 'encrypted-file' | 'plain'
+  steganographyMethod: 'lsb' | 'dct' | 'multi-file' | 'none'
   metadata: {
     originalPayloadName: string
     originalPayloadMimeType?: string
@@ -106,6 +107,13 @@ function deleteCarrierSet(primaryCarrier: string, shardPaths?: string[]): void {
   for (const target of targets) {
     deleteUploadedFile(target)
   }
+}
+
+function preserveCleanCarrierCopy(carrierFile: Express.Multer.File): string {
+  const ext = path.extname(carrierFile.originalname || carrierFile.filename)
+  const cleanCarrierFilename = `clean-${Date.now()}-${crypto.randomUUID()}${ext}`
+  fs.copyFileSync(getUploadedFilePath(carrierFile.filename), getUploadedFilePath(cleanCarrierFilename))
+  return cleanCarrierFilename
 }
 
 async function embedSingleCarrier(options: {
@@ -266,16 +274,19 @@ export async function handleFileUpload(
   const carrierBuffer = readUploadedFile(carrierFile.filename)
   const payloadBuffer = readUploadedFile(payloadFile.filename)
   const encryptedBackup = createEncryptedPayloadBackup(payloadBuffer, password)
+  const cleanCarrierPath = preserveCleanCarrierCopy(carrierFile)
 
   if (!validateMagicBytes(carrierBuffer, carrierFile.mimetype)) {
     deleteUploadedFile(carrierFile.filename)
     deleteUploadedFile(payloadFile.filename)
+    deleteUploadedFile(cleanCarrierPath)
     throw new Error('Carrier file contents do not match the selected MIME type')
   }
 
   if (!validateMagicBytes(payloadBuffer, payloadFile.mimetype)) {
     deleteUploadedFile(carrierFile.filename)
     deleteUploadedFile(payloadFile.filename)
+    deleteUploadedFile(cleanCarrierPath)
     throw new Error('Payload file contents do not match the detected MIME type')
   }
 
@@ -339,6 +350,7 @@ export async function handleFileUpload(
     type: payloadFile.mimetype.startsWith('image') ? 'image' : 'document',
     carrierOriginalName: carrierFile.originalname,
     carrierPath: embeddingResult.storageMode === 'embedded' ? carrierFile.filename : carrierFile.filename,
+    cleanCarrierPath,
     carrierShardPaths: embeddingResult.carrierShardPaths,
     carrierMimeType: carrierFile.mimetype,
     carrierSize: carrierInfo.size,
@@ -368,6 +380,7 @@ export async function handleFileUpload(
     savedFile = await file.save()
   } catch (error) {
     deleteCarrierSet(carrierFile.filename, embeddingResult.carrierShardPaths)
+    deleteUploadedFile(cleanCarrierPath)
     if (embeddingResult.encryptedPayloadPath) {
       deleteStoredFile(getEncryptedPayloadPath(embeddingResult.encryptedPayloadPath))
     }
@@ -391,6 +404,74 @@ export async function handleFileUpload(
     type: savedFile.type,
     carrierPath: savedFile.carrierPath,
     steganographyMethod: savedFile.steganographyMethod,
+    metadata: savedFile.metadata,
+    createdAt: savedFile.createdAt,
+  }
+}
+
+export async function handlePlainFileUpload(
+  userId: string,
+  visibleFile: Express.Multer.File,
+) {
+  if (!visibleFile) {
+    throw new Error('A file is required')
+  }
+
+  const fileInfo = getFileInfo(visibleFile.filename)
+  if (!fileInfo) {
+    throw new Error('Failed to process uploaded file')
+  }
+
+  const fileBuffer = readUploadedFile(visibleFile.filename)
+  if (!validateMagicBytes(fileBuffer, visibleFile.mimetype)) {
+    deleteUploadedFile(visibleFile.filename)
+    throw new Error('Uploaded file contents do not match the detected MIME type')
+  }
+
+  const file = new File({
+    userId,
+    name: visibleFile.originalname,
+    type: visibleFile.mimetype.startsWith('image') ? 'image' : 'document',
+    carrierOriginalName: visibleFile.originalname,
+    carrierPath: visibleFile.filename,
+    carrierMimeType: visibleFile.mimetype || 'application/octet-stream',
+    carrierSize: fileInfo.size,
+    encryptedPayloadSize: 0,
+    storageMode: 'plain',
+    steganographyMethod: 'none',
+    metadata: {
+      originalPayloadName: visibleFile.originalname,
+      originalPayloadSize: visibleFile.size,
+      originalPayloadMimeType: visibleFile.mimetype || 'application/octet-stream',
+      encryptionAlgorithm: 'none',
+    },
+  })
+
+  let savedFile
+  try {
+    savedFile = await file.save()
+  } catch (error) {
+    deleteUploadedFile(visibleFile.filename)
+    throw error
+  }
+
+  writeAuditLog({
+    action: 'file.uploaded',
+    userId,
+    fileId: savedFile._id?.toString(),
+    method: 'none',
+    storageMode: 'plain',
+    shardCount: 1,
+  })
+
+  return {
+    _id: savedFile._id,
+    name: savedFile.name,
+    carrierOriginalName: savedFile.carrierOriginalName,
+    type: savedFile.type,
+    carrierPath: savedFile.carrierPath,
+    steganographyMethod: savedFile.steganographyMethod,
+    storageMode: savedFile.storageMode,
     metadata: savedFile.metadata,
     createdAt: savedFile.createdAt,
   }
@@ -428,6 +509,9 @@ export async function deleteFile(userId: string, fileId: string): Promise<{ _id?
   }
 
   deleteCarrierSet(file.carrierPath, file.carrierShardPaths)
+  if (file.cleanCarrierPath) {
+    deleteUploadedFile(file.cleanCarrierPath)
+  }
   if (file.encryptedPayloadPath) {
     deleteStoredFile(getEncryptedPayloadPath(file.encryptedPayloadPath))
   }
@@ -488,6 +572,10 @@ export async function decryptStoredFile(
 > {
   if (!password) {
     throw new Error('Password is required for decryption')
+  }
+
+  if (file.storageMode === 'plain' || file.steganographyMethod === 'none') {
+    throw new Error('Plain files do not require decryption')
   }
 
   const validation = matchesContext(file.context, context)

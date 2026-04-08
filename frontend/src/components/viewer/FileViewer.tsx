@@ -8,12 +8,17 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
 }
 
+function isProtectedFile(file: VaultFile) {
+  return file.storageMode !== 'plain' && file.steganographyMethod !== 'none'
+}
+
 export default function FileViewer({
   file,
   meta,
   isVaultActive,
   onClose,
   onDecrypt,
+  onShare,
   onOpenMetadata,
   onDelete,
 }: {
@@ -22,6 +27,7 @@ export default function FileViewer({
   isVaultActive: boolean
   onClose: () => void
   onDecrypt: (file: VaultFile) => void
+  onShare: (file: VaultFile) => void
   onOpenMetadata: (fileId: string) => void
   onDelete: (fileId: string) => void
 }) {
@@ -79,6 +85,9 @@ export default function FileViewer({
               <span>{fileInfo?.size} | {file.carrierMimeType}</span>
             </div>
             <div className="viewer-topbar-actions">
+              <button type="button" className="button-ghost" onClick={() => onShare(file)}>
+                Share
+              </button>
               {isVaultActive ? (
                 <button type="button" className="button-ghost" onClick={() => onOpenMetadata(file.id)}>
                   Edit
@@ -96,12 +105,13 @@ export default function FileViewer({
                 <CarrierImage
                   fileId={file.id}
                   alt={meta?.aliasName || file.carrierOriginalName}
+                  mimeType={file.carrierMimeType}
                   className="viewer-image"
                 />
               </div>
             </motion.div>
 
-            {isVaultActive ? (
+            {isVaultActive && isProtectedFile(file) ? (
               <aside className="viewer-info-panel">
                 <div className="viewer-info-section">
                   <span className="eyebrow">Embedded payload</span>
@@ -132,6 +142,9 @@ export default function FileViewer({
                 <div className="viewer-info-actions">
                   <button type="button" className="button-primary" onClick={() => onDecrypt(file)}>
                     Decrypt File
+                  </button>
+                  <button type="button" className="button-secondary" onClick={() => onShare(file)}>
+                    Share
                   </button>
                   <button type="button" className="button-secondary" onClick={() => onOpenMetadata(file.id)}>
                     Edit Metadata

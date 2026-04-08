@@ -100,6 +100,9 @@ export default function Register() {
         <p className="auth-footer">
           Already registered? <Link to="/login">Sign in instead</Link>
         </p>
+        <p className="auth-footer">
+          Received a shared link or code? <Link to="/receive">Open the receiver screen</Link>
+        </p>
       </div>
     </section>
   )

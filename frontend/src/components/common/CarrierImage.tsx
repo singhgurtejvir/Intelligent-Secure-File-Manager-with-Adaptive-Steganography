@@ -4,15 +4,23 @@ import { getCarrierFile } from '@/utils/api'
 export default function CarrierImage({
   fileId,
   alt,
+  mimeType,
   className,
 }: {
   fileId: string
   alt: string
+  mimeType?: string
   className?: string
 }) {
   const [src, setSrc] = useState<string | null>(null)
+  const isImage = !mimeType || mimeType.startsWith('image/')
 
   useEffect(() => {
+    if (!isImage) {
+      setSrc(null)
+      return
+    }
+
     let cancelled = false
     let objectUrl: string | null = null
 
@@ -38,9 +46,9 @@ export default function CarrierImage({
         URL.revokeObjectURL(objectUrl)
       }
     }
-  }, [fileId])
+  }, [fileId, isImage])
 
-  if (!src) {
+  if (!isImage || !src) {
     return <div className={className ? `${className} carrier-image-fallback` : 'carrier-image-fallback'} />
   }
 

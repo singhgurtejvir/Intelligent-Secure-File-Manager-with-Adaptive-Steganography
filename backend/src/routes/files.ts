@@ -7,6 +7,7 @@ import { getUploadedFilePath, upload } from '../utils/upload.js'
 import { matchesContext } from '../utils/context.js'
 import {
   handleFileUpload,
+  handlePlainFileUpload,
   getFileList,
   deleteFile,
   decryptStoredFile,
@@ -25,6 +26,7 @@ type FileModelContract = {
 
 type FileControllerContract = {
   handleFileUpload: typeof handleFileUpload
+  handlePlainFileUpload: typeof handlePlainFileUpload
   getFileList: typeof getFileList
   deleteFile: typeof deleteFile
   decryptStoredFile: typeof decryptStoredFile
@@ -34,6 +36,7 @@ export function createFileRouter({
   fileModel = File as unknown as FileModelContract,
   fileController = {
     handleFileUpload,
+    handlePlainFileUpload,
     getFileList,
     deleteFile,
     decryptStoredFile,
@@ -62,6 +65,29 @@ export function createFileRouter({
   })
 
   // POST /api/files/upload - Upload carrier + payload
+  router.post(
+    '/plain-upload',
+    uploadRateLimit,
+    upload.single('file'),
+    async (req: AuthRequest, res) => {
+      try {
+        const userId = req.userId!
+        const visibleFile = req.file
+
+        if (!visibleFile) {
+          return res.status(400).json({ error: 'A file is required' })
+        }
+
+        const result = await fileController.handlePlainFileUpload(userId, visibleFile)
+        return res.status(201).json(result)
+      } catch (error) {
+        console.error('Plain upload error:', error)
+        const message = error instanceof Error ? error.message : 'Upload failed'
+        return res.status(400).json({ error: message })
+      }
+    },
+  )
+
   router.post(
     '/upload',
     uploadRateLimit,

@@ -32,13 +32,19 @@ function isFileItem(item: WorkspaceItem): item is Extract<WorkspaceItem, { kind:
   return item.kind === 'file'
 }
 
+function isProtectedFile(item: VaultFile): boolean {
+  return item.storageMode !== 'plain' && item.steganographyMethod !== 'none'
+}
+
 export default function FileWorkspace({
   files,
   onDecrypt,
+  onShare,
   onDeleteFiles,
 }: {
   files: VaultFile[]
   onDecrypt: (file: VaultFile) => void
+  onShare: (file: VaultFile) => void
   onDeleteFiles: (fileIds: string[]) => Promise<void>
 }) {
   const isVaultActive = useVaultStore((state) => state.isVaultActive)
@@ -322,6 +328,24 @@ export default function FileWorkspace({
         >
           <button type="button" onClick={() => openItem(visibleItems.find((item) => item.id === contextMenu.id)!)}>Open</button>
           <button type="button" onClick={() => activateRename(visibleItems.find((item) => item.id === contextMenu.id)!)}>Rename</button>
+          {(() => {
+            const target = visibleItems.find((item) => item.id === contextMenu.id)
+            if (!target || target.kind !== 'file') {
+              return null
+            }
+
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  onShare(target)
+                  setContextMenu(null)
+                }}
+              >
+                Share
+              </button>
+            )
+          })()}
           <button
             type="button"
             onClick={() => {
@@ -407,7 +431,7 @@ export default function FileWorkspace({
                     {item.kind === 'folder' ? <span className="folder-mark">DIR</span> : null}
                     {item.kind === 'file' ? (
                       <motion.div layoutId={`carrier-${item.id}`} className="fm-thumb fm-thumb-list">
-                        <CarrierImage fileId={item.id} alt={item.displayName} className="fm-thumb-image" />
+                        <CarrierImage fileId={item.id} alt={item.displayName} mimeType={item.carrierMimeType} className="fm-thumb-image" />
                       </motion.div>
                     ) : null}
                     {renderName(item)}
@@ -416,7 +440,11 @@ export default function FileWorkspace({
                   <span>{new Date(item.createdAt).toLocaleDateString()}</span>
                   {isVaultActive ? (
                     <span>
-                      {item.kind === 'file' ? `${(item.steganographyMethod || 'lsb').toUpperCase()} | ${item.originalPayloadName}` : '--'}
+                      {item.kind === 'file'
+                        ? isProtectedFile(item)
+                          ? `${(item.steganographyMethod || 'lsb').toUpperCase()} | ${item.originalPayloadName}`
+                          : 'Visible file'
+                        : '--'}
                     </span>
                   ) : null}
                 </div>
@@ -470,12 +498,12 @@ export default function FileWorkspace({
                   ) : (
                     <>
                       <motion.div layoutId={`carrier-${item.id}`} className="fm-card-media">
-                        <CarrierImage fileId={item.id} alt={item.displayName} className="fm-card-image" />
+                        <CarrierImage fileId={item.id} alt={item.displayName} mimeType={item.carrierMimeType} className="fm-card-image" />
                       </motion.div>
                       <div className="fm-card-copy">
                         <strong>{renderName(item)}</strong>
                         <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                        {isVaultActive ? (
+                        {isVaultActive && isProtectedFile(item) ? (
                           <span className="method-badge">
                             {(item.steganographyMethod || 'lsb').toUpperCase()}
                           </span>
@@ -502,15 +530,24 @@ export default function FileWorkspace({
                   {isFileItem(detailItem) ? (
                     <>
                       <motion.div layoutId={`carrier-${detailItem.id}`} className="fm-detail-media">
-                        <CarrierImage fileId={detailItem.id} alt={detailItem.displayName} className="fm-detail-image" />
+                        <CarrierImage fileId={detailItem.id} alt={detailItem.displayName} mimeType={detailItem.carrierMimeType} className="fm-detail-image" />
                       </motion.div>
                       <h3>{detailItem.displayName}</h3>
                       <p>{detailItem.carrierMimeType} | {(detailItem.carrierSize / (1024 * 1024)).toFixed(1)} MB</p>
                       {isVaultActive ? (
                         <div className="fm-detail-meta">
-                          <span>Payload {detailItem.originalPayloadName}</span>
-                          <span>Method {(detailItem.steganographyMethod || 'lsb').toUpperCase()}</span>
-                          <span>Capacity {detailItem.capacityUsedPercent?.toFixed(1) || '0.0'}%</span>
+                          {isProtectedFile(detailItem) ? (
+                            <>
+                              <span>Payload {detailItem.originalPayloadName}</span>
+                              <span>Method {(detailItem.steganographyMethod || 'lsb').toUpperCase()}</span>
+                              <span>Capacity {detailItem.capacityUsedPercent?.toFixed(1) || '0.0'}%</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Standard visible file</span>
+                              <span>No embedded payload</span>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="fm-detail-meta">
@@ -519,7 +556,7 @@ export default function FileWorkspace({
                         </div>
                       )}
                       <div className="fm-detail-actions">
-                        {isVaultActive ? (
+                        {isVaultActive && isProtectedFile(detailItem) ? (
                           <>
                             <button type="button" className="button-primary" onClick={() => onDecrypt(detailItem)}>
                               Decrypt
@@ -533,6 +570,13 @@ export default function FileWorkspace({
                             </button>
                           </>
                         ) : null}
+                        <button
+                          type="button"
+                          className={isVaultActive && isProtectedFile(detailItem) ? 'button-secondary' : 'button-primary'}
+                          onClick={() => onShare(detailItem)}
+                        >
+                          Share
+                        </button>
                         <button
                           type="button"
                           className={isVaultActive ? 'button-ghost' : 'button-secondary'}
@@ -590,6 +634,20 @@ export default function FileWorkspace({
             <button type="button" className="button-ghost" onClick={() => setClipboard({ mode: 'copy', itemIds: selection })}>
               Copy
             </button>
+            {selection.length === 1 && !selection[0].startsWith('folder-') ? (
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={() => {
+                  const selectedFile = filesById.get(selection[0])
+                  if (selectedFile) {
+                    onShare(selectedFile)
+                  }
+                }}
+              >
+                Share
+              </button>
+            ) : null}
             {currentLocation.kind === 'trash' ? (
               <button type="button" className="button-ghost" onClick={() => void handlePermanentDelete(selection)}>
                 Delete
@@ -614,6 +672,7 @@ export default function FileWorkspace({
         isVaultActive={isVaultActive}
         onClose={closeViewer}
         onDecrypt={onDecrypt}
+        onShare={onShare}
         onOpenMetadata={openMetadataEditor}
         onDelete={(fileId) => {
           if (currentLocation.kind === 'trash') {

@@ -36,6 +36,22 @@ export interface UploadResult {
   createdAt: string
 }
 
+export interface ShareSummary {
+  id: string
+  shareType: 'account' | 'link' | 'code'
+  deliveryMode: 'plain-file' | 'embedded-carrier' | 'payload-file'
+  recipientEmail?: string
+  fileName: string
+  carrierOriginalName: string
+  downloadFileName: string
+  mimeType: string
+  token?: string
+  code?: string
+  accessCount?: number
+  createdAt: string
+  url?: string
+}
+
 export interface VaultFile {
   id: string
   name: string
@@ -45,8 +61,8 @@ export interface VaultFile {
   carrierSize: number
   originalPayloadSize: number
   originalPayloadName: string
-  steganographyMethod?: 'lsb' | 'dct' | 'multi-file'
-  storageMode?: 'embedded' | 'encrypted-file'
+  steganographyMethod?: 'lsb' | 'dct' | 'multi-file' | 'none'
+  storageMode?: 'embedded' | 'encrypted-file' | 'plain'
   capacityUsedPercent?: number
   shardCount?: number
   createdAt: string
@@ -190,6 +206,53 @@ export async function uploadFile(
   })
 }
 
+export async function uploadPlainFile(
+  visibleFile: File,
+  onProgress?: (percent: number) => void,
+): Promise<UploadResult> {
+  const formData = new FormData()
+  formData.append('file', visibleFile)
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE_URL}/api/files/plain-upload`)
+
+    const token = getAuthHeaders().Authorization
+    if (token) {
+      xhr.setRequestHeader('Authorization', token)
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100))
+      }
+    }
+
+    xhr.onload = () => {
+      try {
+        const payload = JSON.parse(xhr.responseText) as UploadResult | ApiErrorPayload
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(payload as UploadResult)
+          return
+        }
+
+        reject(
+          new ApiError(
+            typeof (payload as ApiErrorPayload).error === 'string'
+              ? ((payload as ApiErrorPayload).error as string)
+              : 'Upload failed',
+          ),
+        )
+      } catch {
+        reject(new ApiError('Upload failed'))
+      }
+    }
+
+    xhr.onerror = () => reject(new ApiError('Upload failed'))
+    xhr.send(formData)
+  })
+}
+
 export async function listFiles(): Promise<VaultFile[]> {
   const response = await fetch(`${API_BASE_URL}/api/files`, {
     headers: getAuthHeaders(),
@@ -254,6 +317,102 @@ export async function getCarrierFile(fileId: string): Promise<Blob> {
   const response = await fetch(`${API_BASE_URL}/api/files/${fileId}/carrier`, {
     headers: getAuthHeaders(),
   })
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.blob()
+}
+
+export async function createShare(input: {
+  fileId: string
+  shareType: 'account' | 'link' | 'code'
+  deliveryMode: 'plain-file' | 'embedded-carrier' | 'payload-file'
+  recipientEmail?: string
+  password?: string
+}): Promise<ShareSummary> {
+  const response = await fetch(`${API_BASE_URL}/api/shares`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(input),
+  })
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.json()
+}
+
+export async function listSentShares(): Promise<ShareSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/api/shares/sent`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.json()
+}
+
+export async function listReceivedShares(): Promise<ShareSummary[]> {
+  const response = await fetch(`${API_BASE_URL}/api/shares/received`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.json()
+}
+
+export async function downloadReceivedShare(shareId: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/shares/received/${shareId}/download`, {
+    headers: getAuthHeaders(),
+  })
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.blob()
+}
+
+export async function getLinkShare(token: string): Promise<ShareSummary> {
+  const response = await fetch(`${API_BASE_URL}/api/shares/link/${encodeURIComponent(token)}`)
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.json()
+}
+
+export async function getCodeShare(code: string): Promise<ShareSummary> {
+  const response = await fetch(`${API_BASE_URL}/api/shares/code/${encodeURIComponent(code.toUpperCase())}`)
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.json()
+}
+
+export async function downloadLinkShare(token: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/shares/link/${encodeURIComponent(token)}/download`)
+
+  if (!response.ok) {
+    await parseApiError(response)
+  }
+
+  return response.blob()
+}
+
+export async function downloadCodeShare(code: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/shares/code/${encodeURIComponent(code.toUpperCase())}/download`)
 
   if (!response.ok) {
     await parseApiError(response)

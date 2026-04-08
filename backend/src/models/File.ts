@@ -7,13 +7,14 @@ interface IFile {
   type: 'image' | 'document'
   carrierOriginalName: string
   carrierPath: string
+  cleanCarrierPath?: string
   carrierShardPaths?: string[]
   carrierMimeType: string
   carrierSize: number
   encryptedPayloadPath?: string
   encryptedPayloadSize: number
-  storageMode: 'embedded' | 'encrypted-file'
-  steganographyMethod: 'lsb' | 'dct' | 'multi-file'
+  storageMode: 'embedded' | 'encrypted-file' | 'plain'
+  steganographyMethod: 'lsb' | 'dct' | 'multi-file' | 'none'
   metadata: {
     originalPayloadName: string
     originalPayloadSize: number
@@ -49,6 +50,7 @@ const FileSchema = new Schema<IFile>(
     type: { type: String, enum: ['image', 'document'], required: true },
     carrierOriginalName: { type: String, required: true },
     carrierPath: { type: String, required: true },
+    cleanCarrierPath: { type: String, required: false },
     carrierShardPaths: [{ type: String }],
     carrierMimeType: { type: String, required: true },
     carrierSize: { type: Number, required: true },
@@ -56,13 +58,13 @@ const FileSchema = new Schema<IFile>(
     encryptedPayloadSize: { type: Number, required: true },
     storageMode: {
       type: String,
-      enum: ['embedded', 'encrypted-file'],
+      enum: ['embedded', 'encrypted-file', 'plain'],
       required: true,
       default: 'embedded',
     },
     steganographyMethod: {
       type: String,
-      enum: ['lsb', 'dct', 'multi-file'],
+      enum: ['lsb', 'dct', 'multi-file', 'none'],
       required: true,
     },
     metadata: {

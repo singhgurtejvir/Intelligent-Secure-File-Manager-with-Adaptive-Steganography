@@ -5,6 +5,8 @@ import Upload from '@/pages/Upload'
 import Settings from '@/pages/Settings'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
+import SharedInbox from '@/pages/SharedInbox'
+import Receive from '@/pages/Receive'
 import AppShell from '@/components/layout/AppShell'
 import PageTransition from '@/components/PageTransition'
 import Toast from '@/components/Toast'
@@ -35,6 +37,7 @@ function RoutedApp() {
         <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/receive" element={<Receive />} />
           <Route
             element={
               <ProtectedRoute>
@@ -63,6 +66,14 @@ function RoutedApp() {
               element={
                 <PageTransition>
                   <Settings />
+                </PageTransition>
+              }
+            />
+            <Route
+              path="/shared"
+              element={
+                <PageTransition>
+                  <SharedInbox />
                 </PageTransition>
               }
             />

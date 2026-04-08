@@ -2,6 +2,7 @@ import request from 'supertest'
 import { createApp } from './app.js'
 import { createAuthRouter } from './routes/auth.js'
 import { createFileRouter } from './routes/files.js'
+import { createShareRouter } from './routes/shares.js'
 import { generateToken } from './utils/auth.js'
 
 const saveUserMock = jest.fn()
@@ -21,9 +22,18 @@ const fileModelMock = {
 }
 
 const handleFileUploadMock = jest.fn()
+const handlePlainFileUploadMock = jest.fn()
 const getFileListMock = jest.fn()
 const deleteFileMock = jest.fn()
 const decryptStoredFileMock = jest.fn()
+const createShareMock = jest.fn()
+const listReceivedSharesMock = jest.fn()
+const listSentSharesMock = jest.fn()
+const getReceivedShareDownloadMock = jest.fn()
+const getPublicLinkShareMock = jest.fn()
+const getPublicCodeShareMock = jest.fn()
+const getPublicLinkDownloadMock = jest.fn()
+const getPublicCodeDownloadMock = jest.fn()
 
 describe('app integration', () => {
   const authRouter = createAuthRouter({
@@ -33,12 +43,25 @@ describe('app integration', () => {
     fileModel: fileModelMock,
     fileController: {
       handleFileUpload: handleFileUploadMock,
+      handlePlainFileUpload: handlePlainFileUploadMock,
       getFileList: getFileListMock,
       deleteFile: deleteFileMock,
       decryptStoredFile: decryptStoredFileMock,
     },
   })
-  const app = createApp({ authRouter, fileRouter })
+  const shareRouter = createShareRouter({
+    shareController: {
+      createShare: createShareMock,
+      listReceivedShares: listReceivedSharesMock,
+      listSentShares: listSentSharesMock,
+      getReceivedShareDownload: getReceivedShareDownloadMock,
+      getPublicLinkShare: getPublicLinkShareMock,
+      getPublicCodeShare: getPublicCodeShareMock,
+      getPublicLinkDownload: getPublicLinkDownloadMock,
+      getPublicCodeDownload: getPublicCodeDownloadMock,
+    },
+  })
+  const app = createApp({ authRouter, fileRouter, shareRouter })
   const token = generateToken('user-1', 'user@example.com')
 
   beforeEach(() => {
@@ -121,6 +144,31 @@ describe('app integration', () => {
     expect(handleFileUploadMock).toHaveBeenCalled()
   })
 
+  it('uploads a plain file without embedding', async () => {
+    handlePlainFileUploadMock.mockResolvedValueOnce({
+      _id: 'file-plain-1',
+      name: 'notes.pdf',
+      createdAt: new Date().toISOString(),
+      storageMode: 'plain',
+    })
+
+    const response = await request(app)
+      .post('/api/files/plain-upload')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('%PDF-1.4 plain file payload'), {
+        filename: 'notes.pdf',
+        contentType: 'application/pdf',
+      })
+
+    expect(response.status).toBe(201)
+    expect(handlePlainFileUploadMock).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        originalname: 'notes.pdf',
+      }),
+    )
+  })
+
   it('decrypts and returns binary content', async () => {
     findFileByIdMock.mockReturnValueOnce({
       exec: jest.fn().mockResolvedValue({
@@ -198,5 +246,82 @@ describe('app integration', () => {
 
     expect(response.status).toBe(200)
     expect(deleteFileMock).toHaveBeenCalledWith('user-1', 'file-1')
+  })
+
+  it('creates a share for an authenticated sender', async () => {
+    createShareMock.mockResolvedValueOnce({
+      id: 'share-1',
+      shareType: 'link',
+      deliveryMode: 'plain-file',
+      downloadFileName: 'notes.pdf',
+      url: 'http://localhost:5173/receive?link=abc123',
+    })
+
+    const response = await request(app)
+      .post('/api/shares')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        fileId: 'file-plain-1',
+        shareType: 'link',
+        deliveryMode: 'plain-file',
+      })
+
+    expect(response.status).toBe(201)
+    expect(createShareMock).toHaveBeenCalledWith(
+      'user-1',
+      'user@example.com',
+      expect.objectContaining({
+        fileId: 'file-plain-1',
+        shareType: 'link',
+        deliveryMode: 'plain-file',
+      }),
+    )
+  })
+
+  it('lists received account shares for an authenticated recipient', async () => {
+    listReceivedSharesMock.mockResolvedValueOnce([
+      {
+        id: 'share-2',
+        shareType: 'account',
+        deliveryMode: 'payload-file',
+        downloadFileName: 'secret.pdf',
+      },
+    ])
+
+    const response = await request(app)
+      .get('/api/shares/received')
+      .set('Authorization', `Bearer ${token}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body).toHaveLength(1)
+  })
+
+  it('resolves a public code share', async () => {
+    getPublicCodeShareMock.mockResolvedValueOnce({
+      id: 'share-3',
+      shareType: 'code',
+      deliveryMode: 'plain-file',
+      code: 'ABCD1234',
+      downloadFileName: 'notes.pdf',
+    })
+
+    const response = await request(app).get('/api/shares/code/ABCD1234')
+
+    expect(response.status).toBe(200)
+    expect(response.body.code).toBe('ABCD1234')
+  })
+
+  it('downloads a public link share', async () => {
+    getPublicLinkDownloadMock.mockResolvedValueOnce({
+      content: Buffer.from('shared-bytes'),
+      mimeType: 'text/plain',
+      downloadFileName: 'shared.txt',
+    })
+
+    const response = await request(app).get('/api/shares/link/token-1/download')
+
+    expect(response.status).toBe(200)
+    expect(response.header['content-type']).toContain('text/plain')
+    expect(response.text).toBe('shared-bytes')
   })
 })

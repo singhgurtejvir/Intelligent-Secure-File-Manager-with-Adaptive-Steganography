@@ -76,19 +76,23 @@ export default function Navbar() {
             <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}>
               Files
             </NavLink>
-            {isVaultActive ? (
-              <NavLink
-                to="/upload"
-                className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
-              >
-                Secure Upload
-              </NavLink>
-            ) : null}
+            <NavLink
+              to="/upload"
+              className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
+            >
+              Upload
+            </NavLink>
             <NavLink
               to="/settings"
               className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
             >
               Settings
+            </NavLink>
+            <NavLink
+              to="/shared"
+              className={({ isActive }) => `nav-link ${isActive ? 'nav-link-active' : ''}`}
+            >
+              Shared
             </NavLink>
           </nav>
 
@@ -148,19 +152,23 @@ export default function Navbar() {
         <NavLink to="/" className={({ isActive }) => `mobile-tab ${isActive ? 'mobile-tab-active' : ''}`}>
           Files
         </NavLink>
-        {isVaultActive ? (
-          <NavLink
-            to="/upload"
-            className={({ isActive }) => `mobile-tab ${isActive ? 'mobile-tab-active' : ''}`}
-          >
-            Secure
-          </NavLink>
-        ) : null}
+        <NavLink
+          to="/upload"
+          className={({ isActive }) => `mobile-tab ${isActive ? 'mobile-tab-active' : ''}`}
+        >
+          Upload
+        </NavLink>
         <NavLink
           to="/settings"
           className={({ isActive }) => `mobile-tab ${isActive ? 'mobile-tab-active' : ''}`}
         >
           Settings
+        </NavLink>
+        <NavLink
+          to="/shared"
+          className={({ isActive }) => `mobile-tab ${isActive ? 'mobile-tab-active' : ''}`}
+        >
+          Shared
         </NavLink>
       </nav>
     </>

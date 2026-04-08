@@ -6,14 +6,17 @@ import { requestIdMiddleware, securityHeaders } from './middleware/security.js'
 import { createRateLimit } from './middleware/rateLimit.js'
 import { createAuthRouter } from './routes/auth.js'
 import { createFileRouter } from './routes/files.js'
+import { createShareRouter } from './routes/shares.js'
 import { getQueueStatus } from './services/queue.js'
 
 export function createApp({
   authRouter = createAuthRouter(),
   fileRouter = createFileRouter(),
+  shareRouter = createShareRouter(),
 }: {
   authRouter?: ReturnType<typeof createAuthRouter>
   fileRouter?: ReturnType<typeof createFileRouter>
+  shareRouter?: ReturnType<typeof createShareRouter>
 } = {}) {
   const app = express()
   const authRateLimit = createRateLimit({ windowMs: 60_000, maxRequests: 20, keyPrefix: 'auth' })
@@ -46,6 +49,7 @@ export function createApp({
 
   app.use('/api/auth', authRateLimit, authRouter)
   app.use('/api/files', fileRouter)
+  app.use('/api/shares', shareRouter)
 
   app.get('/health', (_req, res) => {
     res.json({

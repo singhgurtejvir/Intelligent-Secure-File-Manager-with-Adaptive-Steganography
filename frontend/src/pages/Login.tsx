@@ -64,6 +64,9 @@ export default function Login() {
         <p className="auth-footer">
           Need an account? <Link to="/register">Create one here</Link>
         </p>
+        <p className="auth-footer">
+          Have a share link or code? <Link to="/receive">Retrieve it here</Link>
+        </p>
       </div>
     </section>
   )
